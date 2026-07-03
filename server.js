@@ -110,8 +110,15 @@ function detectCli() {
   });
 }
 
+// CORS: lets the hosted site (suuu-three.vercel.app) use this local bridge
+const CORS = {
+  "access-control-allow-origin": "*",
+  "access-control-allow-methods": "GET, POST, OPTIONS",
+  "access-control-allow-headers": "content-type",
+};
+
 function json(res, code, obj) {
-  res.writeHead(code, { "content-type": "application/json; charset=utf-8" });
+  res.writeHead(code, { "content-type": "application/json; charset=utf-8", ...CORS });
   res.end(JSON.stringify(obj));
 }
 
@@ -126,6 +133,11 @@ const MIME = {
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, "http://x");
+
+  if (req.method === "OPTIONS") {
+    res.writeHead(204, CORS);
+    return res.end();
+  }
 
   if (req.method === "GET" && url.pathname === "/api/status") {
     const v = await detectCli();

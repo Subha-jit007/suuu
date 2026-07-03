@@ -247,15 +247,18 @@ body::after{
 <div id="drawer">
   <div class="card">
     <h2>API KEY — OPTIONAL</h2>
-    <p>suuu already runs on your <b>Claude Code login</b> — no key needed.
-       Paste an Anthropic API key only if you want the site to work
-       without Claude Code (e.g. hosted for someone else). Stored in this
-       browser only.</p>
+    <p><b>No-key way:</b> if Claude Code is installed on this computer, run
+       <b>wake-suuu.bat</b> from
+       <b>github.com/Subha-jit007/suuu</b> and press the button below —
+       suuu links to it, powered by your Claude login.<br><br>
+       <b>Key way:</b> paste an Anthropic API key. Stored in this browser
+       only.</p>
     <input id="keyInp" type="password" placeholder="sk-ant-…">
     <div class="row">
       <button id="saveKey">SAVE</button>
       <button id="clearKey">USE CLAUDE CODE (NO KEY)</button>
     </div>
+    <p id="drawerNote" style="margin:14px 0 0; font-size:13px; color:var(--cyan)"></p>
   </div>
 </div>
 
@@ -440,7 +443,7 @@ async function ask(text){
   history.push({ role:"user", content:text });
   setMood("thinking"); think(true);
   try{
-    const res = await fetch("/api/chat", {
+    const res = await fetch(apiBase + "/api/chat", {
       method:"POST", headers:{ "content-type":"application/json" },
       body: JSON.stringify({ messages: history, apiKey: localStorage.getItem("suuu-key") || undefined })
     });
@@ -472,22 +475,45 @@ function greet(){
   else if (bridgeMode === "key")
     addSuuu("Yo. I'm suuu — Subha's agent, awake and linked through your key. Ask me about his work, or let's build something. What's up?");
   else
-    addSuuu("Yo. I'm suuu — Subha's agent. This is the hosted me, so I need one thing to fully wake: hit \"key optional ⚙\" below-left and drop an Anthropic API key (stays in your browser). Or run me locally with Claude Code — no key needed there.");
+    addSuuu("Yo. I'm suuu — Subha's agent. To fully wake me, pick one:\n\n1. NO KEY — if you have Claude Code installed: grab the repo at github.com/Subha-jit007/suuu, run wake-suuu.bat, and I'll auto-link to it from right here within ~30s.\n\n2. KEY — hit \"key optional ⚙\" below-left and paste an Anthropic API key (stays in your browser).");
   inp.focus();
 }
 
 /* ---------------- status + key drawer ---------------- */
 let bridgeMode = "none";   // cli | key | none
+let apiBase = "";          // "" = same origin; local bridge URL when hosted page links to it
+const LOCAL_BRIDGE = "http://localhost:5151";
+
+async function probeLocalBridge(){
+  try{
+    const r = await fetch(LOCAL_BRIDGE + "/api/status", { signal: AbortSignal.timeout(1500) });
+    const d = await r.json();
+    return !!d.cli;
+  } catch { return false; }
+}
+
 async function checkStatus(){
   const st = $("#status"), txt = $("#status-txt");
   const key = localStorage.getItem("suuu-key");
+  if (key){ bridgeMode = "key"; apiBase = ""; st.className = "status ok"; txt.textContent = "API KEY MODE"; return; }
   try{
     const r = await fetch("/api/status"); const d = await r.json();
-    if (key){ bridgeMode = "key"; st.className = "status ok"; txt.textContent = "API KEY MODE"; }
-    else if (d.cli){ bridgeMode = "cli"; st.className = "status ok"; txt.textContent = "CLAUDE CODE LINKED · NO KEY"; }
-    else if (d.hosted){ bridgeMode = "none"; st.className = "status bad"; txt.textContent = "HOSTED — ADD A KEY TO CHAT"; }
-    else { bridgeMode = "none"; st.className = "status bad"; txt.textContent = "CLAUDE CODE NOT FOUND — ADD A KEY"; }
-  } catch { bridgeMode = "none"; st.className = "status bad"; txt.textContent = "BRIDGE OFFLINE — RUN: node server.js"; }
+    if (d.cli){ bridgeMode = "cli"; apiBase = ""; st.className = "status ok"; txt.textContent = "CLAUDE CODE LINKED · NO KEY"; return; }
+    // hosted (or CLI missing): look for a suuu bridge running on the visitor's machine
+    if (await probeLocalBridge()){
+      bridgeMode = "cli"; apiBase = LOCAL_BRIDGE;
+      st.className = "status ok"; txt.textContent = "LOCAL BRIDGE LINKED · NO KEY"; return;
+    }
+    bridgeMode = "none"; apiBase = "";
+    st.className = "status bad";
+    txt.textContent = d.hosted ? "NO KEY & NO LOCAL BRIDGE — SEE ⚙" : "CLAUDE CODE NOT FOUND — ADD A KEY";
+  } catch {
+    if (await probeLocalBridge()){
+      bridgeMode = "cli"; apiBase = LOCAL_BRIDGE;
+      st.className = "status ok"; txt.textContent = "LOCAL BRIDGE LINKED · NO KEY"; return;
+    }
+    bridgeMode = "none"; apiBase = ""; st.className = "status bad"; txt.textContent = "BRIDGE OFFLINE — RUN: wake-suuu.bat";
+  }
 }
 $("#gear").addEventListener("click", () => {
   $("#keyInp").value = localStorage.getItem("suuu-key") || "";
@@ -499,9 +525,13 @@ $("#saveKey").addEventListener("click", () => {
   if (v) localStorage.setItem("suuu-key", v);
   $("#drawer").classList.remove("open"); checkStatus();
 });
-$("#clearKey").addEventListener("click", () => {
+$("#clearKey").addEventListener("click", async () => {
   localStorage.removeItem("suuu-key");
-  $("#drawer").classList.remove("open"); checkStatus();
+  $("#drawerNote").textContent = "looking for Claude Code / a local suuu bridge…";
+  await checkStatus();
+  $("#drawerNote").textContent = $("#status-txt").textContent +
+    (bridgeMode === "cli" ? " — you're in, close this and talk." :
+     " — bridge not found. Run wake-suuu.bat (needs Claude Code), then press this again.");
 });
 
 size(); buildWeb(); tick();
