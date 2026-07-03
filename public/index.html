@@ -443,10 +443,12 @@ async function ask(text){
   history.push({ role:"user", content:text });
   setMood("thinking"); think(true);
   try{
-    const res = await fetch(apiBase + "/api/chat", {
+    const opts = {
       method:"POST", headers:{ "content-type":"application/json" },
       body: JSON.stringify({ messages: history, apiKey: localStorage.getItem("suuu-key") || undefined })
-    });
+    };
+    if (apiBase) opts.targetAddressSpace = "loopback";
+    const res = await fetch(apiBase + "/api/chat", opts);
     const data = await res.json();
     think(false);
     if (data.error) { addErr(data.error); setMood("idle"); }
@@ -475,7 +477,7 @@ function greet(){
   else if (bridgeMode === "key")
     addSuuu("Yo. I'm suuu — Subha's agent, awake and linked through your key. Ask me about his work, or let's build something. What's up?");
   else
-    addSuuu("Yo. I'm suuu — Subha's agent. To fully wake me, pick one:\n\n1. NO KEY — if you have Claude Code installed: grab the repo at github.com/Subha-jit007/suuu, run wake-suuu.bat, and I'll auto-link to it from right here within ~30s.\n\n2. KEY — hit \"key optional ⚙\" below-left and paste an Anthropic API key (stays in your browser).");
+    addSuuu("Yo. I'm suuu — Subha's agent. To fully wake me, pick one:\n\n1. NO KEY — if you have Claude Code installed: grab the repo at github.com/Subha-jit007/suuu, run wake-suuu.bat, then hit \"key optional ⚙\" → USE CLAUDE CODE. If Chrome asks to allow access to your local network, say yes — that's me linking to your own machine.\n\n2. KEY — hit \"key optional ⚙\" and paste an Anthropic API key (stays in your browser).");
   inp.focus();
 }
 
@@ -486,7 +488,8 @@ const LOCAL_BRIDGE = "http://localhost:5151";
 
 async function probeLocalBridge(){
   try{
-    const r = await fetch(LOCAL_BRIDGE + "/api/status", { signal: AbortSignal.timeout(1500) });
+    // targetAddressSpace opts into Chrome's Local Network Access permission flow
+    const r = await fetch(LOCAL_BRIDGE + "/api/status", { signal: AbortSignal.timeout(4000), targetAddressSpace: "loopback" });
     const d = await r.json();
     return !!d.cli;
   } catch { return false; }

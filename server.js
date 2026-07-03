@@ -115,6 +115,9 @@ const CORS = {
   "access-control-allow-origin": "*",
   "access-control-allow-methods": "GET, POST, OPTIONS",
   "access-control-allow-headers": "content-type",
+  // Chrome Private/Local Network Access: lets the public hosted site reach this loopback bridge
+  "access-control-allow-private-network": "true",
+  "access-control-allow-local-network": "true",
 };
 
 function json(res, code, obj) {
