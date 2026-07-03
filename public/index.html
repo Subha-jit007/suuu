@@ -71,7 +71,12 @@ body::after{
 #app{
   position:relative; z-index:1; height:100%; padding-top:34px;
   display:grid; grid-template-columns:minmax(300px,42%) 1fr;
-  opacity:0;
+  opacity:0; transition:opacity .6s ease;
+}
+#errbar{
+  position:fixed; bottom:0; left:0; right:0; z-index:99; display:none;
+  background:var(--red); color:#fff; font:12px/1.4 var(--body);
+  padding:8px 14px; white-space:pre-wrap;
 }
 @media (max-width:820px){
   #app{grid-template-columns:1fr; grid-template-rows:38% 1fr}
@@ -230,6 +235,12 @@ body::after{
 <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
 <script>
 const $ = (s) => document.querySelector(s);
+window.addEventListener("error", (e) => {
+  let bar = document.getElementById("errbar");
+  if (!bar){ bar = document.createElement("div"); bar.id = "errbar"; document.body.appendChild(bar); }
+  bar.style.display = "block";
+  bar.textContent = "suuu hit a snag: " + e.message + " @ " + (e.lineno || "?");
+});
 const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
 const hasGsap = typeof gsap !== "undefined";
 
@@ -349,12 +360,25 @@ function boot(){
     gsap.from("#wake", { scale:0, rotation:8, ease:"elastic.out(1,.45)", duration:1, delay:.9 });
   }
 }
+let woke = false;
+function done(){
+  if (woke) return; woke = true;
+  if (hasGsap) gsap.killTweensOf(["#boot", "#boot .letters b", "#app"]);
+  $("#boot").style.display = "none";
+  $("#app").style.opacity = 1;
+  $("#app").style.transform = "none";
+  size();            // re-measure entity canvas now that layout is final
+  greet();
+}
 $("#wake").addEventListener("click", () => {
-  const done = () => { $("#boot").style.display = "none"; $("#app").style.opacity = 1; greet(); };
+  // the reveal NEVER depends on animation callbacks — setTimeout owns it,
+  // GSAP is decoration that is allowed to fail
   if (hasGsap && !reduced){
-    gsap.to("#boot .letters b", { y:-90, opacity:0, stagger:.06, duration:.35, ease:"power3.in" });
-    gsap.to("#boot", { opacity:0, duration:.5, delay:.3, onComplete: done });
-    gsap.fromTo("#app", { opacity:0, y:24 }, { opacity:1, y:0, duration:.7, delay:.55 });
+    try{
+      gsap.to("#boot .letters b", { y:-90, opacity:0, stagger:.06, duration:.35, ease:"power3.in", overwrite:true });
+      gsap.to("#boot", { opacity:0, duration:.5, delay:.25, overwrite:true });
+    } catch(e){}
+    setTimeout(done, 800);
   } else done();
 });
 
